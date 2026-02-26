@@ -1,55 +1,69 @@
-#include <chrono>
-#include <functional>
 #include <memory>
+#include <chrono>
 #include <cmath>
 
 #include "rclcpp/rclcpp.hpp"
-#include "tf2_ros/transform_broadcaster.hpp"
+#include "tf2_ros/transform_broadcaster.h"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 
 using namespace std::chrono_literals;
 
-/*
- * TODO: Create a Class named 'TFBroadcaster' that inherits from rclcpp::Node.
- * Requirements:
- * 1. The constructor should name the node "tf_broadcaster".
- * 2. Create a TransformBroadcaster.
- * 3. Create a timer that triggers every 100ms.
- * 4. In timer callback:
- *    - Create a TransformStamped message
- *    - Set header.stamp to current time
- *    - Set header.frame_id to "world"
- *    - Set child_frame_id to "robot"
- *    - Calculate circular motion:
- *      x = 2.0 * cos(time_seconds)
- *      y = 2.0 * sin(time_seconds)
- *      z = 0.0
- *    - Set rotation to identity quaternion (0, 0, 0, 1)
- *    - Broadcast the transform
- */
-
 class TFBroadcaster : public rclcpp::Node
 {
 public:
-    TFBroadcaster()
-        : Node("tf_broadcaster")
-    {
-        // TODO: Create the transform broadcaster here
+  TFBroadcaster()
+  : Node("tf_broadcaster")
+  {
+    broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
-        // TODO: Create the timer here
-    }
+    // Store initial time so motion starts at t = 0
+    start_time_ = this->get_clock()->now();
+
+    timer_ = this->create_wall_timer(
+      100ms, std::bind(&TFBroadcaster::timer_callback, this));
+  }
 
 private:
-    // TODO: Define timer_callback function here
+  void timer_callback()
+  {
+    auto now = this->get_clock()->now();
 
-    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-    rclcpp::TimerBase::SharedPtr timer_;
+    // Time since node started
+    double t = (now - start_time_).seconds();
+
+    // Circular motion (radius = 2)
+    double x = 2.0 * std::cos(t);
+    double y = 2.0 * std::sin(t);
+
+    geometry_msgs::msg::TransformStamped transform;
+
+    transform.header.stamp = now;
+    transform.header.frame_id = "world";
+    transform.child_frame_id = "robot";
+
+    // Translation
+    transform.transform.translation.x = x;
+    transform.transform.translation.y = y;
+    transform.transform.translation.z = 0.0;
+
+    // Identity quaternion (no rotation)
+    transform.transform.rotation.x = 0.0;
+    transform.transform.rotation.y = 0.0;
+    transform.transform.rotation.z = 0.0;
+    transform.transform.rotation.w = 1.0;
+
+    broadcaster_->sendTransform(transform);
+  }
+
+  rclcpp::TimerBase::SharedPtr timer_;
+  std::shared_ptr<tf2_ros::TransformBroadcaster> broadcaster_;
+  rclcpp::Time start_time_;
 };
 
-int main(int argc, char *argv[])
+int main(int argc, char * argv[])
 {
-    rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<TFBroadcaster>());
-    rclcpp::shutdown();
-    return 0;
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<TFBroadcaster>());
+  rclcpp::shutdown();
+  return 0;
 }
